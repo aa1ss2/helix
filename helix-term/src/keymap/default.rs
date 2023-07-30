@@ -317,6 +317,8 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
         "!" => shell_insert_output,
         "A-!" => shell_append_output,
         "$" => shell_keep_pipe,
+        "}" => shell_selection_shell_command,
+        "A-}" => shell_primary_selection_shell_command,
         "C-z" => suspend,
 
         "C-a" => increment,

@@ -479,6 +479,8 @@ impl MappableCommand {
         shell_insert_output, "Insert shell command output before selections",
         shell_append_output, "Append shell command output after selections",
         shell_keep_pipe, "Filter selections with shell predicate",
+        shell_primary_selection_shell_command ,"Run a shell command ,primary selection write to stdin",
+        shell_selection_shell_command ,"Run a shell command ,all selection join to stdin",
         suspend, "Suspend and return to shell",
         rename_symbol, "Rename symbol",
         increment, "Increment item under cursor",
@@ -5236,6 +5238,18 @@ enum ShellBehavior {
     Ignore,
     Insert,
     Append,
+}
+
+fn shell_primary_selection_shell_command(cx: &mut Context) {
+    shell_prompt(
+        cx,
+        "primary-selction-shell-command:".into(),
+        ShellBehavior::Ignore,
+    );
+}
+
+fn shell_selection_shell_command(cx: &mut Context) {
+    shell_prompt(cx, "selction-shell-command:".into(), ShellBehavior::Ignore);
 }
 
 fn shell_pipe(cx: &mut Context) {
