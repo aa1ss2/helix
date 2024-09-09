@@ -142,9 +142,11 @@ where
         helix_view::editor::StatusLineElement::Spinner => render_lsp_spinner,
         helix_view::editor::StatusLineElement::FileBaseName => render_file_base_name,
         helix_view::editor::StatusLineElement::FileName => render_file_name,
+        helix_view::editor::StatusLineElement::FileAbsolutePath => render_file_absolute_path,
         helix_view::editor::StatusLineElement::FileModificationIndicator => {
             render_file_modification_indicator
         }
+        helix_view::editor::StatusLineElement::ReadOnlyIndicator => render_read_only_indicator,
         helix_view::editor::StatusLineElement::FileEncoding => render_file_encoding,
         helix_view::editor::StatusLineElement::FileLineEnding => render_file_line_ending,
         helix_view::editor::StatusLineElement::FileType => render_file_type,
@@ -226,7 +228,8 @@ where
 {
     let (warnings, errors) = context
         .doc
-        .shown_diagnostics()
+        .diagnostics()
+        .iter()
         .fold((0, 0), |mut counts, diag| {
             use helix_core::diagnostic::Severity;
             match diag.severity {
@@ -428,6 +431,22 @@ where
     write(context, title, None);
 }
 
+fn render_file_absolute_path<F>(context: &mut RenderContext, write: F)
+where
+    F: Fn(&mut RenderContext, String, Option<Style>) + Copy,
+{
+    let title = {
+        let path = context.doc.path();
+        let path = path
+            .as_ref()
+            .map(|p| p.to_string_lossy())
+            .unwrap_or_else(|| SCRATCH_BUFFER_NAME.into());
+        format!(" {} ", path)
+    };
+
+    write(context, title, None);
+}
+
 fn render_file_modification_indicator<F>(context: &mut RenderContext, write: F)
 where
     F: Fn(&mut RenderContext, String, Option<Style>) + Copy,
@@ -442,6 +461,19 @@ where
     write(context, title, None);
 }
 
+fn render_read_only_indicator<F>(context: &mut RenderContext, write: F)
+where
+    F: Fn(&mut RenderContext, String, Option<Style>) + Copy,
+{
+    let title = if context.doc.readonly {
+        " [readonly] "
+    } else {
+        ""
+    }
+    .to_string();
+    write(context, title, None);
+}
+
 fn render_file_base_name<F>(context: &mut RenderContext, write: F)
 where
     F: Fn(&mut RenderContext, String, Option<Style>) + Copy,
@@ -450,7 +482,7 @@ where
         let rel_path = context.doc.relative_path();
         let path = rel_path
             .as_ref()
-            .and_then(|p| p.as_path().file_name().map(|s| s.to_string_lossy()))
+            .and_then(|p| p.file_name().map(|s| s.to_string_lossy()))
             .unwrap_or_else(|| SCRATCH_BUFFER_NAME.into());
         format!(" {} ", path)
     };
