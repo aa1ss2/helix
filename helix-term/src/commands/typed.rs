@@ -2282,59 +2282,6 @@ fn pipe_impl(
     Ok(())
 }
 
-fn selection_shell_command_impl(
-    cx: &mut compositor::Context,
-    args: &[Cow<str>],
-    event: PromptEvent,
-    primary_only: bool,
-) -> anyhow::Result<()> {
-    if event != PromptEvent::Validate {
-        return Ok(());
-    }
-
-    let shell = cx.editor.config().shell.clone();
-    let args = args.join(" ");
-    let (view, doc) = current!(cx.editor);
-    let selection = doc.selection(view.id);
-    let mut input = Rope::new();
-    let text = doc.text().slice(..);
-
-    if primary_only {
-        input.append(selection.primary().slice(text).into());
-    } else {
-        for range in selection.ranges() {
-            input.append(range.slice(text).into());
-        }
-    }
-
-    let callback = async move {
-        let (output, success) = shell_impl_async(&shell, &args, Some(input)).await?;
-        let call: job::Callback = Callback::EditorCompositor(Box::new(
-            move |editor: &mut Editor, compositor: &mut Compositor| {
-                if !output.is_empty() {
-                    let contents = ui::Markdown::new(
-                        format!("```sh\n{}\n```", output),
-                        editor.syn_loader.clone(),
-                    );
-                    let popup = Popup::new("shell", contents).position(Some(
-                        helix_core::Position::new(editor.cursor().0.unwrap_or_default().row, 2),
-                    ));
-                    compositor.replace_or_push("shell", popup);
-                }
-                if success {
-                    editor.set_status("Command succeeded");
-                } else {
-                    editor.set_error("Command failed");
-                }
-            },
-        ));
-        Ok(call)
-    };
-    cx.jobs.callback(callback);
-
-    Ok(())
-}
-
 fn selection_shell_command(
     cx: &mut compositor::Context,
     args: &[Cow<str>],
@@ -2377,7 +2324,7 @@ fn selection_shell_command_impl(
     }
 
     let callback = async move {
-        let output = shell_impl_async(&shell, &args, None).await?;
+        let output = shell_impl_async(&shell, &args, Some(input)).await?;
         let call: job::Callback = Callback::EditorCompositor(Box::new(
             move |editor: &mut Editor, compositor: &mut Compositor| {
                 if !output.is_empty() {
@@ -2398,22 +2345,6 @@ fn selection_shell_command_impl(
     cx.jobs.callback(callback);
 
     Ok(())
-}
-
-fn selection_shell_command(
-    cx: &mut compositor::Context,
-    args: &[Cow<str>],
-    event: PromptEvent,
-) -> anyhow::Result<()> {
-    selection_shell_command_impl(cx, args, event, false)
-}
-
-fn primary_selection_shell_command(
-    cx: &mut compositor::Context,
-    args: &[Cow<str>],
-    event: PromptEvent,
-) -> anyhow::Result<()> {
-    selection_shell_command_impl(cx, args, event, true)
 }
 
 fn run_shell_command(
@@ -3228,14 +3159,14 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
     },
         TypableCommand {
             name: "selction-shell-command",
-            aliases: &[],
+            aliases: &["ssc"],
             doc: "Run a shell command ,all selection join to stdin",
             fun: selection_shell_command,
             signature: CommandSignature::none(),
         },
         TypableCommand {
             name: "primary-selction-shell-command",
-            aliases: &[],
+            aliases: &["psc"],
             doc: "Run a shell command ,primary selection write to stdin",
             fun: primary_selection_shell_command,
             signature: CommandSignature::none(),

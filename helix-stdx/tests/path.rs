@@ -1,10 +1,6 @@
 #![cfg(windows)]
 
-use std::{
-    env::set_current_dir,
-    error::Error,
-    path::{Component, Path, PathBuf},
-};
+use std::{env::set_current_dir, error::Error, path::Component};
 
 use helix_stdx::path;
 use tempfile::Builder;
@@ -34,7 +30,7 @@ fn test_case_folding_windows() -> Result<(), Box<dyn Error>> {
     );
     let test_path = root_without_prefix.join(lowercase_case);
     assert_eq!(
-        path::normalize(&test_path),
+        path::normalize(test_path),
         case.path().strip_prefix(&tmp_prefix)?
     );
 
