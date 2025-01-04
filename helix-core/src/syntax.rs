@@ -125,6 +125,9 @@ pub struct LanguageConfiguration {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub formatter: Option<FormatterConfiguration>,
 
+    /// If set, overrides `editor.path-completion`.
+    pub path_completion: Option<bool>,
+
     #[serde(default)]
     pub diagnostic_severity: Severity,
 
@@ -616,7 +619,7 @@ pub enum CapturedNode<'a> {
     Grouped(Vec<Node<'a>>),
 }
 
-impl<'a> CapturedNode<'a> {
+impl CapturedNode<'_> {
     pub fn start_byte(&self) -> usize {
         match self {
             Self::Single(n) => n.start_byte(),
@@ -1849,7 +1852,7 @@ struct HighlightIterLayer<'a> {
     depth: u32,
 }
 
-impl<'a> fmt::Debug for HighlightIterLayer<'a> {
+impl fmt::Debug for HighlightIterLayer<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("HighlightIterLayer").finish()
     }
@@ -2106,7 +2109,7 @@ impl HighlightConfiguration {
     }
 }
 
-impl<'a> HighlightIterLayer<'a> {
+impl HighlightIterLayer<'_> {
     // First, sort scope boundaries by their byte offset in the document. At a
     // given position, emit scope endings before scope beginnings. Finally, emit
     // scope boundaries from deeper layers first.
@@ -2244,7 +2247,7 @@ fn intersect_ranges(
     result
 }
 
-impl<'a> HighlightIter<'a> {
+impl HighlightIter<'_> {
     fn emit_event(
         &mut self,
         offset: usize,
@@ -2299,7 +2302,7 @@ impl<'a> HighlightIter<'a> {
     }
 }
 
-impl<'a> Iterator for HighlightIter<'a> {
+impl Iterator for HighlightIter<'_> {
     type Item = Result<HighlightEvent, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -2663,12 +2666,20 @@ fn node_is_visible(node: &Node) -> bool {
     node.is_missing() || (node.is_named() && node.language().node_kind_is_visible(node.kind_id()))
 }
 
+fn format_anonymous_node_kind(kind: &str) -> Cow<str> {
+    if kind.contains('"') {
+        Cow::Owned(kind.replace('"', "\\\""))
+    } else {
+        Cow::Borrowed(kind)
+    }
+}
+
 pub fn pretty_print_tree<W: fmt::Write>(fmt: &mut W, node: Node) -> fmt::Result {
     if node.child_count() == 0 {
         if node_is_visible(&node) {
             write!(fmt, "({})", node.kind())
         } else {
-            write!(fmt, "\"{}\"", node.kind())
+            write!(fmt, "\"{}\"", format_anonymous_node_kind(node.kind()))
         }
     } else {
         pretty_print_tree_impl(fmt, &mut node.walk(), 0)
@@ -2692,6 +2703,8 @@ fn pretty_print_tree_impl<W: fmt::Write>(
         }
 
         write!(fmt, "({}", node.kind())?;
+    } else {
+        write!(fmt, " \"{}\"", format_anonymous_node_kind(node.kind()))?;
     }
 
     // Handle children.
@@ -2950,7 +2963,7 @@ mod test {
     #[test]
     fn test_pretty_print() {
         let source = r#"// Hello"#;
-        assert_pretty_print("rust", source, "(line_comment)", 0, source.len());
+        assert_pretty_print("rust", source, "(line_comment \"//\")", 0, source.len());
 
         // A large tree should be indented with fields:
         let source = r#"fn main() {
@@ -2960,16 +2973,16 @@ mod test {
             "rust",
             source,
             concat!(
-                "(function_item\n",
+                "(function_item \"fn\"\n",
                 "  name: (identifier)\n",
-                "  parameters: (parameters)\n",
-                "  body: (block\n",
+                "  parameters: (parameters \"(\" \")\")\n",
+                "  body: (block \"{\"\n",
                 "    (expression_statement\n",
                 "      (macro_invocation\n",
-                "        macro: (identifier)\n",
-                "        (token_tree\n",
-                "          (string_literal\n",
-                "            (string_content)))))))",
+                "        macro: (identifier) \"!\"\n",
+                "        (token_tree \"(\"\n",
+                "          (string_literal \"\\\"\"\n",
+                "            (string_content) \"\\\"\") \")\")) \";\") \"}\"))",
             ),
             0,
             source.len(),
@@ -2981,7 +2994,7 @@ mod test {
 
         // Error nodes are printed as errors:
         let source = r#"}{"#;
-        assert_pretty_print("rust", source, "(ERROR)", 0, source.len());
+        assert_pretty_print("rust", source, "(ERROR \"}\" \"{\")", 0, source.len());
 
         // Fields broken under unnamed nodes are determined correctly.
         // In the following source, `object` belongs to the `singleton_method`
@@ -2996,11 +3009,11 @@ mod test {
             "ruby",
             source,
             concat!(
-                "(singleton_method\n",
-                "  object: (self)\n",
+                "(singleton_method \"def\"\n",
+                "  object: (self) \".\"\n",
                 "  name: (identifier)\n",
                 "  body: (body_statement\n",
-                "    (true)))"
+                "    (true)) \"end\")"
             ),
             0,
             source.len(),
